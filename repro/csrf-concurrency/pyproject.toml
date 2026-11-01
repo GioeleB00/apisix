@@ -1,0 +1,23 @@
+[project]
+name = "apisix-csrf-concurrency-repro"
+version = "0.1.0"
+description = "Standalone browser reproduction of APISIX CSRF cookie concurrency"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "playwright==1.64.1",
+]
+
+[dependency-groups]
+dev = [
+    "ruff==0.16.10",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "ANN"]
+
+[tool.uv]
+package = false

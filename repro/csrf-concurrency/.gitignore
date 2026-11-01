@@ -1,0 +1,18 @@
+# Local signing key and temporary files used while preparing .env.
+.env
+.env.*
+!.env.example
+
+# APISIX's root ignore rules exclude hidden files by default.
+!.gitignore
+!.python-version
+!.dockerignore
+
+# Generated Python environments and tool caches.
+.venv/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+
+# Sanitized experiment reports are generated locally.
+/reports/

@@ -1,0 +1,85 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License. You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: apisix-csrf-repro
+
+services:
+  server:
+    image: apisix-csrf-repro-server:0.1.0
+    build:
+      context: ./server
+    restart: "no"
+    init: true
+    read_only: true
+    expose:
+      - "8080"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import json, urllib.request;
+          response = urllib.request.urlopen("http://127.0.0.1:8080/api/read", timeout=2);
+          assert response.status == 200 and json.load(response) == {"ok": True}
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 3s
+
+  apisix:
+    image: apache/apisix:3.18.0-ubuntu
+    # A failed experiment should remain visible instead of restarting forever.
+    restart: "no"
+    depends_on:
+      server:
+        condition: service_healthy
+    # Compose reads .env for interpolation; only the key is passed to APISIX.
+    environment:
+      CSRF_REPRO_SIGNING_KEY: "${CSRF_REPRO_SIGNING_KEY:?Run ./scripts/bootstrap.sh and configure the signing key in .env}"
+    ports:
+      - "127.0.0.1:${CSRF_REPRO_HTTP_PORT:-19088}:9080"
+    volumes:
+      - type: bind
+        source: ./apisix/config.yaml
+        target: /usr/local/apisix/conf/config.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./apisix/apisix.yaml
+        target: /usr/local/apisix/conf/apisix.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      # Exercise the real route and upstream, not only the Nginx process.
+      test:
+        - CMD
+        - /usr/local/openresty/bin/resty
+        - -I
+        - /usr/local/apisix/deps/share/lua/5.1
+        - -e
+        - >-
+          local client = require("resty.http").new();
+          client:set_timeout(2000);
+          local response = client:request_uri("http://127.0.0.1:9080/api/read", {keepalive = false});
+          local body = response and require("cjson.safe").decode(response.body);
+          if not response or response.status ~= 200 or type(body) ~= "table" or body.ok ~= true then os.exit(1) end
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
